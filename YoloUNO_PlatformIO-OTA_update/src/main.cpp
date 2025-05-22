@@ -6,6 +6,11 @@
 #include <Shared_Attribute_Update.h>
 #include <Attribute_Request.h>
 #include <Espressif_Updater.h>
+#include <MFRC522.h>
+
+
+
+
 //Shared Attributes Configuration
 constexpr uint8_t MAX_ATTRIBUTES = 2U; //
 constexpr std::array<const char*, MAX_ATTRIBUTES> 
@@ -27,8 +32,8 @@ constexpr uint8_t FIRMWARE_FAILURE_RETRIES = 12U;
 // increased packet size, might increase download speed
 constexpr uint16_t FIRMWARE_PACKET_SIZE = 4096U;
 
-constexpr char WIFI_SSID[] = "T.V.H";
-constexpr char WIFI_PASSWORD[] = "12345678";
+constexpr char WIFI_SSID[] = "HCMUT36";
+constexpr char WIFI_PASSWORD[] = "12345679";
 constexpr char TOKEN[] = "64oj5zft2oqu20qx8zxf";
 constexpr char THINGSBOARD_SERVER[] = "app.coreiot.io";
 constexpr char TEMPERATURE_KEY[] = "temperature";
