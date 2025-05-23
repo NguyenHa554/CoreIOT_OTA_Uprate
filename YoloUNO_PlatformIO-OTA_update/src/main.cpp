@@ -1,73 +1,83 @@
-#include <SPI.h>
-#include <MFRC522.h>
+#include <WiFi.h>
+#include <Arduino_MQTT_Client.h>
+#include <ThingsBoard.h>
 
-// #define SS_PIN    5   // D5
-// #define RST_PIN   4   // D4
+constexpr char WIFI_SSID[] = "T.V.H";
+constexpr char WIFI_PASSWORD[] = "12345678";
+constexpr char TOKEN[] = "h4bifhszk7kt6qa75y5b";
+constexpr char THINGSBOARD_SERVER[] = "app.coreiot.io";
+constexpr uint16_t THINGSBOARD_PORT = 1883;
 
-// MFRC522 rfid(SS_PIN, RST_PIN);
-// unsigned long lastUIDTime = 0;
-// String lastUID = "";
+constexpr uint32_t MAX_MESSAGE_SIZE = 1024;
+constexpr uint32_t SERIAL_DEBUG_BAUD = 115200;
+constexpr uint16_t SEND_INTERVAL = 5000;
 
-// void setup() {
-//   Serial.begin(115200);
-//   SPI.begin();               // SCK, MISO, MOSI auto map
-//   rfid.PCD_Init();           // Init RFID
-//   Serial.println("Chạm thẻ RFID...");
-// }
+WiFiClient espClient;
+Arduino_MQTT_Client mqttClient(espClient);
+ThingsBoard tb(mqttClient, MAX_MESSAGE_SIZE);
 
-// void loop() {
-//   // Kiểm tra thẻ mới
-//   if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) {
-//     return;
-//   }
+String validUIDs[] = { "04A1B2C3D4", "123456789" }; // UID hợp lệ
 
-//   // Đọc UID
-//   String uidStr = "";
-//   for (byte i = 0; i < rfid.uid.size; i++) {
-//     uidStr += String(rfid.uid.uidByte[i] < 0x10 ? "0" : "");
-//     uidStr += String(rfid.uid.uidByte[i], HEX);
-//   }
-//   uidStr.toUpperCase();
+void InitWiFi() {
+  Serial.println("🔌 Connecting to WiFi...");
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\n✅ Connected to WiFi.");
+}
 
-//   Serial.println("Thẻ quét: " + uidStr);
+bool reconnect() {
+  if (WiFi.status() != WL_CONNECTED) {
+    InitWiFi();
+  }
 
-//   // Nếu là cùng UID với lần trước => tính thời gian sử dụng
-//   if (uidStr == lastUID) {
-//     unsigned long now = millis();
-//     float durationMinutes = (now - lastUIDTime) / 60000.0;
-//     Serial.printf("UID %s đã sử dụng: %.2f phút\n", uidStr.c_str(), durationMinutes);
-//     // reset để lần sau test tiếp
-//     lastUID = "";
-//   } else {
-//     // Lưu UID & thời gian quẹt vào
-//     lastUID = uidStr;
-//     lastUIDTime = millis();
-//     Serial.println("Ghi nhận thời điểm vào...");
-//   }
-
-//   rfid.PICC_HaltA();         // Dừng đọc
-//   rfid.PCD_StopCrypto1();    // Dừng mã hóa
-// }
-
-String rfidUID = "";
+  if (!tb.connected()) {
+    Serial.printf("🌐 Connecting to ThingsBoard (%s)...\n", THINGSBOARD_SERVER);
+    return tb.connect(THINGSBOARD_SERVER, TOKEN, THINGSBOARD_PORT);
+  }
+  return true;
+}
 
 void setup() {
-  Serial.begin(115200);
-  Serial.println("Nhập UID để giả lập quét thẻ:");
+  Serial.begin(SERIAL_DEBUG_BAUD);
+  InitWiFi();
+  Serial.println("=== RFID Serial Simulation ===");
+  Serial.println("Nhập UID RFID:");
 }
 
 void loop() {
+  if (!reconnect()) return;
+
+  if (tb.connected()) {
+    tb.loop();
+  }
+
+  // Giả lập quét UID qua Serial
   if (Serial.available()) {
-    rfidUID = Serial.readStringUntil('\n');
-    rfidUID.trim();
+    String uid = Serial.readStringUntil('\n');
+    uid.trim();
+    Serial.println("📥 UID nhập: " + uid);
 
-    Serial.println("Thẻ được quét có UID: " + rfidUID);
-
-    // Giả lập xử lý
-    if (rfidUID == "04A1B2C3D4") {
-      Serial.println("Truy cập được cho phép.");
-    } else {
-      Serial.println("Truy cập bị từ chối.");
+    // Kiểm tra UID hợp lệ
+    bool authorized = false;
+    for (String valid : validUIDs) {
+      if (uid == valid) {
+        authorized = true;
+        break;
+      }
     }
+
+    if (authorized) {
+      Serial.println("✅ UID hợp lệ. Gửi lên ThingsBoard...");
+    } else {
+      Serial.println("❌ UID không hợp lệ. Vẫn gửi lên để test.");
+    }
+
+    // Gửi dữ liệu lên ThingsBoard
+    tb.sendTelemetryData("rfid_uid", uid.c_str());
+    tb.sendTelemetryData("access_granted", authorized); // true/false
+    tb.sendAttributeData("last_uid", uid.c_str());
   }
 }
