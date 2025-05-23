@@ -25,15 +25,15 @@ uint32_t previousTelemetrySend;
 // Firmware title and version used to compare with remote version, to check if an update is needed.
 // Title needs to be the same and version needs to be different --> downgrading is possible
 constexpr char CURRENT_FIRMWARE_TITLE[] = "OTA";
-constexpr char CURRENT_FIRMWARE_VERSION[] = "1.1";
+constexpr char CURRENT_FIRMWARE_VERSION[] = "1.3";
 // Maximum amount of retries we attempt to download each firmware chunck over MQTT
 constexpr uint8_t FIRMWARE_FAILURE_RETRIES = 12U;
 // Size of each firmware chunck downloaded over MQTT,
 // increased packet size, might increase download speed
 constexpr uint16_t FIRMWARE_PACKET_SIZE = 4096U;
 
-constexpr char WIFI_SSID[] = "HCMUT36";
-constexpr char WIFI_PASSWORD[] = "12345679";
+constexpr char WIFI_SSID[] = "T.V.H";
+constexpr char WIFI_PASSWORD[] = "12345678";
 constexpr char TOKEN[] = "64oj5zft2oqu20qx8zxf";
 constexpr char THINGSBOARD_SERVER[] = "app.coreiot.io";
 constexpr char TEMPERATURE_KEY[] = "temperature";
@@ -46,11 +46,16 @@ constexpr uint64_t REQUEST_TIMEOUT_MICROSECONDS = 10000U * 1000U;
 void requestTimedOut() {
   Serial.printf("Attribute request timed out did not receive a response in (%llu) microseconds. Ensure client is connected to the MQTT broker and that the keys actually exist on the target device\n", REQUEST_TIMEOUT_MICROSECONDS);
 }
+
+
 // Initialize underlying client, used to establish a connection
 WiFiClient espClient;
+
+
 // Initalize the Mqtt client instance
 Arduino_MQTT_Client mqttClient(espClient);
 // Initialize used apis
+
 OTA_Firmware_Update<> ota;
 Shared_Attribute_Update<1U, MAX_ATTRIBUTES> shared_update;
 Attribute_Request<2U, MAX_ATTRIBUTES> attr_request;
@@ -59,6 +64,7 @@ const std::array<IAPI_Implementation*, 3U> apis = {
     &attr_request,
     &ota
 };
+
 // Initialize ThingsBoard instance with the maximum needed buffer size
 ThingsBoard tb(mqttClient, MAX_MESSAGE_RECEIVE_SIZE, MAX_MESSAGE_SEND_SIZE, Default_Max_Stack_Size, apis);
 // Initalize the Updater client instance used to flash binary to flash memory
