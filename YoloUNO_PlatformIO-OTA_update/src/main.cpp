@@ -67,7 +67,7 @@ bool updateRequestSent = false;
 bool requestedShared = false;
 uint32_t previousTelemetrySend = 0;
 
-constexpr std::array<const char*, 2U> SHARED_ATTRIBUTES = { "POWER", "ledState" };
+constexpr std::array<const char*, 1U> SHARED_ATTRIBUTES = {"doorState"};
 
 void update_starting_callback() {}
 void finished_callback(const bool & success) {
@@ -81,11 +81,25 @@ void requestTimedOut() {
   Serial.printf("Attribute request timed out after %llu microseconds.\n", 10000000ULL);
 }
 void processSharedAttributeUpdate(const JsonObjectConst &data) {
+  if (data.containsKey("doorState")) {
+    String state = data["doorState"].as<String>();
+    state.toUpperCase();
+
+    if (state == "OPEN") {
+      digitalWrite(RELAY_PIN, RELAY_ACTIVE_STATE);
+      Serial.println(" Mở khóa từ xa");
+    } else if (state == "CLOSE") {
+      digitalWrite(RELAY_PIN, RELAY_INACTIVE_STATE);
+      Serial.println(" Đóng khóa từ xa");
+    }
+  }
+
   const size_t jsonSize = Helper::Measure_Json(data);
   char buffer[jsonSize];
   serializeJson(data, buffer, jsonSize);
   Serial.println(buffer);
 }
+
 void processSharedAttributeRequest(const JsonObjectConst &data) {
   const size_t jsonSize = Helper::Measure_Json(data);
   char buffer[jsonSize];
@@ -181,7 +195,7 @@ void OTATask(void *pvParameters) {
     //   previousTelemetrySend = millis();
     // }
 
-    tb.loop();
+    // tb.loop();
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
@@ -208,6 +222,8 @@ void RFIDTask(void *pvParameters) {
     uid.toUpperCase();
 
     Serial.println("UID: " + uid);
+    tb.sendTelemetryData("rfid_uid", uid);  // Gửi UID thẻ RFID lên ThingsBoard
+    tb.sendAttributeData("rfid_uid", uid);  // Gửi UID thẻ RFID lên ThingsBoard
 
     if (activeUID == "") {
       // Lần đầu quét thẻ → mở khóa
@@ -215,6 +231,8 @@ void RFIDTask(void *pvParameters) {
       startTime = millis();
       digitalWrite(RELAY_PIN, RELAY_ACTIVE_STATE);
       Serial.println("🔓 Khóa đã mở.");
+      tb.sendAttributeData("doorState", "OPEN");  // Gửi trạng thái mở khóa lên ThingsBoard
+      tb.sendTelemetryData("doorState", "OPEN");  // Gửi trạng thái mở khóa lên ThingsBoard
     } 
     else if (uid == activeUID) {
       // Quét lại thẻ cũ → đóng khóa
@@ -223,6 +241,10 @@ void RFIDTask(void *pvParameters) {
       Serial.println("🔒 Đóng khóa.");
       Serial.printf("⏱ Đã sử dụng: %.2f phút\n", minutesUsed);
       digitalWrite(RELAY_PIN, RELAY_INACTIVE_STATE);
+
+      tb.sendAttributeData("doorState", "CLOSE");  // Gửi trạng thái đóng khóa lên ThingsBoard
+      tb.sendTelemetryData("doorState", "CLOSE");  // Gửi trạng thái đóng khóa lên ThingsBoard
+      
       activeUID = "";
       startTime = 0;
     } 
