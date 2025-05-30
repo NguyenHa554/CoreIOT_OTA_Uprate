@@ -11,9 +11,12 @@
 
 
 // RFID reader pins
-#define SS_PIN    21  // GPIO21 - SDA
-#define RST_PIN   22  // GPIO22 - RST
-#define RELAY_PIN 18  // GPIO18 - Relay
+#define SS_PIN    GPIO_NUM_5 // GPIO5 - SDA
+#define RST_PIN   GPIO_NUM_4  // GPIO4 - RST
+#define RELAY_PIN GPIO_NUM_25  // GPIO18 - Relay
+#define SCK_PIN  GPIO_NUM_18  // GPIO18 - SCK
+#define MOSI_PIN GPIO_NUM_23  // GPIO23 - MOSI
+#define MISO_PIN GPIO_NUM_19  // GPIO19 - MISO
 
 #define RELAY_ACTIVE_STATE HIGH
 #define RELAY_INACTIVE_STATE LOW
@@ -29,17 +32,17 @@ TaskHandle_t RFIDTaskHandle = NULL;
 TaskHandle_t OTATaskHandle = NULL;
 
 // WiFi & ThingsBoard setup
-constexpr char WIFI_SSID[] = "T.V.H";
-constexpr char WIFI_PASSWORD[] = "12345678";
-constexpr char TOKEN[] = "64oj5zft2oqu20qx8zxf";
+constexpr char WIFI_SSID[] = "HCMUT36";
+constexpr char WIFI_PASSWORD[] = "12345679";
+constexpr char TOKEN[] = "h4bifhszk7kt6qa75y5b";
 constexpr char THINGSBOARD_SERVER[] = "app.coreiot.io";
 constexpr uint16_t THINGSBOARD_PORT = 1883U;
 constexpr uint32_t SERIAL_DEBUG_BAUD = 115200U;
 constexpr uint16_t TELEMETRY_INTERVAL = 5000U;
 
 // OTA config
-constexpr char CURRENT_FIRMWARE_TITLE[] = "OTA";
-constexpr char CURRENT_FIRMWARE_VERSION[] = "1.2";
+constexpr char CURRENT_FIRMWARE_TITLE[] = "OTA_RFID";
+constexpr char CURRENT_FIRMWARE_VERSION[] = "1.1";
 constexpr uint8_t FIRMWARE_FAILURE_RETRIES = 12U;
 constexpr uint16_t FIRMWARE_PACKET_SIZE = 4096U;
 
@@ -166,17 +169,17 @@ void OTATask(void *pvParameters) {
       }
     }
 
-    if (millis() - previousTelemetrySend > TELEMETRY_INTERVAL) {
-      float temperature = random(25.8, 26);
-      float humidity = random(50.2, 51);
+    // if (millis() - previousTelemetrySend > TELEMETRY_INTERVAL) {
+    //   float temperature = random(25.8, 26);
+    //   float humidity = random(50.2, 51);
 
-      tb.sendTelemetryData("temperature", temperature);
-      tb.sendTelemetryData("humidity", humidity);
-      tb.sendAttributeData("rssi", WiFi.RSSI());
+    //   tb.sendTelemetryData("temperature", temperature);
+    //   tb.sendTelemetryData("humidity", humidity);
+    //   tb.sendAttributeData("rssi", WiFi.RSSI());
 
-      Serial.printf("Telemetry -> Temp: %.1f, Hum: %.1f\n", temperature, humidity);
-      previousTelemetrySend = millis();
-    }
+    //   Serial.printf("Telemetry -> Temp: %.1f, Hum: %.1f\n", temperature, humidity);
+    //   previousTelemetrySend = millis();
+    // }
 
     tb.loop();
     vTaskDelay(pdMS_TO_TICKS(1000));
@@ -184,7 +187,7 @@ void OTATask(void *pvParameters) {
 }
 
 void RFIDTask(void *pvParameters) {
-  SPI.begin();                  // MISO:19, MOSI:23, SCK:18
+  SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);                  // Khởi tạo SPI với các chân đã định nghĩa
   rfid.PCD_Init();
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, RELAY_INACTIVE_STATE);
