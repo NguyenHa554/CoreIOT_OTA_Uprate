@@ -152,13 +152,16 @@ void OTATask(void *pvParameters) {
         );
         requestedShared = attr_request.Shared_Attributes_Request(sharedCallback);
       }
-
+      
+      
       if (!shared_update_subscribed) {
         const Shared_Attribute_Callback<2U> callback(&processSharedAttributeUpdate, SHARED_ATTRIBUTES);
         shared_update_subscribed = shared_update.Shared_Attributes_Subscribe(callback);
         Serial.println(shared_update_subscribed ? "Shared attributes subscribed." : "Failed to subscribe.");
       }
     }
+
+    
 
     if (!currentFWSent) {
       currentFWSent = ota.Firmware_Send_Info(CURRENT_FIRMWARE_TITLE, CURRENT_FIRMWARE_VERSION);
