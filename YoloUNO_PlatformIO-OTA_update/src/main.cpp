@@ -9,6 +9,9 @@
 #include <MFRC522.h>
 #include <Wire.h>
 #include <Esp32Servo.h>
+#include <HTTPClient.h>
+#include <Manage.h>
+
 
 // RFID reader pins
 #define SS_PIN    GPIO_NUM_5   // GPIO5 - SDA
@@ -21,6 +24,8 @@
 #define SERVO_PIN GPIO_NUM_25
 #define SERVO_OPEN_ANGLE 90
 #define SERVO_CLOSE_ANGLE 0
+
+
 
 Servo doorServo;
 MFRC522 rfid(SS_PIN, RST_PIN);
@@ -190,10 +195,13 @@ void RFIDTask(void *pvParameters) {
   rfid.PCD_Init();
   doorServo.attach(SERVO_PIN);
   doorServo.write(SERVO_CLOSE_ANGLE);
-
+  
+  manageSystem.begin();  // Initialize the management system
   Serial.println("RFID task started. Waiting for cards...");
 
   while (1) {
+    manageSystem.checkButton();  // Check in/out button state
+    
     if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) {
       vTaskDelay(pdMS_TO_TICKS(100));
       continue;
@@ -207,6 +215,11 @@ void RFIDTask(void *pvParameters) {
     uid.toUpperCase();
 
     Serial.println("UID: " + uid);
+    
+    // Handle RFID card with management system
+    manageSystem.handleRFIDCard(uid);
+
+    // Send telemetry data to ThingsBoard
     tb.sendTelemetryData("rfid_uid", uid);
     tb.sendAttributeData("rfid_uid", uid);
 
@@ -231,9 +244,6 @@ void RFIDTask(void *pvParameters) {
       activeUID = "";
       startTime = 0;
     } 
-    else {
-      Serial.println("⚠️ UID không khớp. Bỏ qua.");
-    }
 
     rfid.PICC_HaltA();
     rfid.PCD_StopCrypto1();
