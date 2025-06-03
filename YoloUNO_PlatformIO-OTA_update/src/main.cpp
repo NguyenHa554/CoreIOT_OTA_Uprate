@@ -185,20 +185,6 @@ void OTATask(void *pvParameters) {
         updateRequestSent = ota.Subscribe_Firmware_Update(callback);
       }
     }
-
-    // if (millis() - previousTelemetrySend > TELEMETRY_INTERVAL) {
-    //   float temperature = random(25.8, 26);
-    //   float humidity = random(50.2, 51);
-
-    //   tb.sendTelemetryData("temperature", temperature);
-    //   tb.sendTelemetryData("humidity", humidity);
-    //   tb.sendAttributeData("rssi", WiFi.RSSI());
-
-    //   Serial.printf("Telemetry -> Temp: %.1f, Hum: %.1f\n", temperature, humidity);
-    //   previousTelemetrySend = millis();
-    // }
-
-    // tb.loop();
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }

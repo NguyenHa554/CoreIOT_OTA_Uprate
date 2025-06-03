@@ -56,7 +56,7 @@
   "C_Cpp_Runner.showCompilationTime": false,
   "C_Cpp_Runner.useLinkTimeOptimization": false,
   "C_Cpp_Runner.msvcSecureNoWarnings": false,
-  "cmake.sourceDirectory": "C:/nguyen/iot/lab4/YoloUNO_PlatformIO-OTA_update/lib/ArduinoJson/src",
+  "cmake.sourceDirectory": "C:/nguyen/code/iot/lab4/YoloUNO_PlatformIO-OTA_update/lib/ArduinoJson/src",
   "files.associations": {
     "array": "cpp"
   }
