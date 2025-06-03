@@ -5,24 +5,25 @@
 #include <Shared_Attribute_Update.h>
 #include <Attribute_Request.h>
 #include <Espressif_Updater.h>
-#include <SPI.h>  //rifd reader communication
+#include <SPI.h>
 #include <MFRC522.h>
-#include <Wire.h> //i2c communication
-
+#include <Wire.h>
+#include <Esp32Servo.h>
 
 // RFID reader pins
-#define SS_PIN    GPIO_NUM_5 // GPIO5 - SDA
-#define RST_PIN   GPIO_NUM_4  // GPIO4 - RST
-#define RELAY_PIN GPIO_NUM_25  // GPIO18 - Relay
-#define SCK_PIN  GPIO_NUM_18  // GPIO18 - SCK
-#define MOSI_PIN GPIO_NUM_23  // GPIO23 - MOSI
-#define MISO_PIN GPIO_NUM_19  // GPIO19 - MISO
+#define SS_PIN    GPIO_NUM_5   // GPIO5 - SDA
+#define RST_PIN   GPIO_NUM_4   // GPIO4 - RST
+#define SCK_PIN   GPIO_NUM_18
+#define MOSI_PIN  GPIO_NUM_23
+#define MISO_PIN  GPIO_NUM_19
 
-#define RELAY_ACTIVE_STATE HIGH
-#define RELAY_INACTIVE_STATE LOW
+// Servo pin & angles
+#define SERVO_PIN GPIO_NUM_25
+#define SERVO_OPEN_ANGLE 90
+#define SERVO_CLOSE_ANGLE 0
 
+Servo doorServo;
 MFRC522 rfid(SS_PIN, RST_PIN);
-
 
 String activeUID = "";
 unsigned long startTime = 0;
@@ -31,7 +32,7 @@ unsigned long startTime = 0;
 TaskHandle_t RFIDTaskHandle = NULL;
 TaskHandle_t OTATaskHandle = NULL;
 
-// WiFi & ThingsBoard setup
+// WiFi & ThingsBoard config
 constexpr char WIFI_SSID[] = "HCMUT36";
 constexpr char WIFI_PASSWORD[] = "12345679";
 constexpr char TOKEN[] = "h4bifhszk7kt6qa75y5b";
@@ -86,11 +87,11 @@ void processSharedAttributeUpdate(const JsonObjectConst &data) {
     state.toUpperCase();
 
     if (state == "OPEN") {
-      digitalWrite(RELAY_PIN, RELAY_ACTIVE_STATE);
-      Serial.println(" Mở khóa từ xa");
+      doorServo.write(SERVO_OPEN_ANGLE);
+      Serial.println("🔓 Mở khóa từ xa");
     } else if (state == "CLOSE") {
-      digitalWrite(RELAY_PIN, RELAY_INACTIVE_STATE);
-      Serial.println(" Đóng khóa từ xa");
+      doorServo.write(SERVO_CLOSE_ANGLE);
+      Serial.println("🔒 Đóng khóa từ xa");
     }
   }
 
@@ -99,7 +100,6 @@ void processSharedAttributeUpdate(const JsonObjectConst &data) {
   serializeJson(data, buffer, jsonSize);
   Serial.println(buffer);
 }
-
 void processSharedAttributeRequest(const JsonObjectConst &data) {
   const size_t jsonSize = Helper::Measure_Json(data);
   char buffer[jsonSize];
@@ -107,9 +107,7 @@ void processSharedAttributeRequest(const JsonObjectConst &data) {
   Serial.println(buffer);
 }
 
-
-
-// Initialize WiFi connection
+// Initialize WiFi
 void InitWiFi() {
   Serial.println("Connecting to AP...");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -126,7 +124,7 @@ bool reconnect() {
   return true;
 }
 
-// OTA task chạy song song
+// OTA task
 void OTATask(void *pvParameters) {
   while (1) {
     if (!reconnect()) {
@@ -152,16 +150,13 @@ void OTATask(void *pvParameters) {
         );
         requestedShared = attr_request.Shared_Attributes_Request(sharedCallback);
       }
-      
-      
+
       if (!shared_update_subscribed) {
         const Shared_Attribute_Callback<2U> callback(&processSharedAttributeUpdate, SHARED_ATTRIBUTES);
         shared_update_subscribed = shared_update.Shared_Attributes_Subscribe(callback);
         Serial.println(shared_update_subscribed ? "Shared attributes subscribed." : "Failed to subscribe.");
       }
     }
-
-    
 
     if (!currentFWSent) {
       currentFWSent = ota.Firmware_Send_Info(CURRENT_FIRMWARE_TITLE, CURRENT_FIRMWARE_VERSION);
@@ -189,51 +184,50 @@ void OTATask(void *pvParameters) {
   }
 }
 
+// RFID task
 void RFIDTask(void *pvParameters) {
-  SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);                  // Khởi tạo SPI với các chân đã định nghĩa
+  SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
   rfid.PCD_Init();
-  pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, RELAY_INACTIVE_STATE);
+  doorServo.attach(SERVO_PIN);
+  doorServo.write(SERVO_CLOSE_ANGLE);
 
   Serial.println("RFID task started. Waiting for cards...");
 
   while (1) {
     if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) {
-      vTaskDelay(pdMS_TO_TICKS(100));  
+      vTaskDelay(pdMS_TO_TICKS(100));
       continue;
     }
 
     String uid = "";
     for (byte i = 0; i < rfid.uid.size; i++) {
-      uid += String(rfid.uid.uidByte[i] < 0x10 ? "0" : ""); 
-      uid += String(rfid.uid.uidByte[i], HEX);  // Chuyển đổi từng byte UID sang chuỗi hex
+      uid += String(rfid.uid.uidByte[i] < 0x10 ? "0" : "");
+      uid += String(rfid.uid.uidByte[i], HEX);
     }
     uid.toUpperCase();
 
     Serial.println("UID: " + uid);
-    tb.sendTelemetryData("rfid_uid", uid);  // Gửi UID thẻ RFID lên ThingsBoard
-    tb.sendAttributeData("rfid_uid", uid);  // Gửi UID thẻ RFID lên ThingsBoard
+    tb.sendTelemetryData("rfid_uid", uid);
+    tb.sendAttributeData("rfid_uid", uid);
 
     if (activeUID == "") {
-      // Lần đầu quét thẻ → mở khóa
       activeUID = uid;
       startTime = millis();
-      digitalWrite(RELAY_PIN, RELAY_ACTIVE_STATE);
+      doorServo.write(SERVO_OPEN_ANGLE);
       Serial.println("🔓 Khóa đã mở.");
-      tb.sendAttributeData("doorState", "OPEN");  // Gửi trạng thái mở khóa lên ThingsBoard
-      tb.sendTelemetryData("doorState", "OPEN");  // Gửi trạng thái mở khóa lên ThingsBoard
+      tb.sendAttributeData("doorState", "OPEN");
+      tb.sendTelemetryData("doorState", "OPEN");
     } 
     else if (uid == activeUID) {
-      // Quét lại thẻ cũ → đóng khóa
       unsigned long usedTime = millis() - startTime;
       float minutesUsed = usedTime / 60000.0;
       Serial.println("🔒 Đóng khóa.");
       Serial.printf("⏱ Đã sử dụng: %.2f phút\n", minutesUsed);
-      digitalWrite(RELAY_PIN, RELAY_INACTIVE_STATE);
+      doorServo.write(SERVO_CLOSE_ANGLE);
 
-      tb.sendAttributeData("doorState", "CLOSE");  // Gửi trạng thái đóng khóa lên ThingsBoard
-      tb.sendTelemetryData("doorState", "CLOSE");  // Gửi trạng thái đóng khóa lên ThingsBoard
-      
+      tb.sendAttributeData("doorState", "CLOSE");
+      tb.sendTelemetryData("doorState", "CLOSE");
+
       activeUID = "";
       startTime = 0;
     } 
@@ -244,7 +238,7 @@ void RFIDTask(void *pvParameters) {
     rfid.PICC_HaltA();
     rfid.PCD_StopCrypto1();
 
-    vTaskDelay(pdMS_TO_TICKS(1000));  // Giảm tần suất quét
+    vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
 
@@ -257,5 +251,5 @@ void setup() {
 }
 
 void loop() {
-  // Không cần làm gì trong loop nếu đã có task
+  // Nothing here
 }
